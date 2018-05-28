@@ -474,8 +474,8 @@ int main(int argc, char *argv[]) {
   fprintf(stderr, "Loading took %.3fs; now: Display.\n",
           (GetTimeInMillis() - start_load) / 1000.0);
 
-  signal(SIGTERM, InterruptHandler);
-  signal(SIGINT, InterruptHandler);
+  signal(SIGTERM, InterruptHandler);	// Termina la señal, libreria propia de c
+  signal(SIGINT, InterruptHandler);		// Interrumpe la señal, libreria propia de c
 
   do {
     if (do_shuffle) {
