@@ -19,7 +19,7 @@
 // Then compile with
 // $ make led-image-viewer
 
-#include "led-matrix.h"
+#include "led-matrix.h"			// Llamada a bibliotecas necesarias
 #include "pixel-mapper.h"
 #include "content-streamer.h"
 
@@ -42,32 +42,32 @@
 #include <Magick++.h>
 #include <magick/image.h>
 
-using rgb_matrix::GPIO;
+using rgb_matrix::GPIO;				// Uso de parametros de las bibliotecas incluidas
 using rgb_matrix::Canvas;
 using rgb_matrix::FrameCanvas;
 using rgb_matrix::RGBMatrix;
 using rgb_matrix::StreamReader;
 
-typedef int64_t tmillis_t;
-static const tmillis_t distant_future = (1LL<<40); // that is a while.
+typedef int64_t tmillis_t;	// Declara tmillis_t del tipo int64_t, cada vez que se utilice, se referira a dicho tipo de datos
+static const tmillis_t distant_future = (1LL<<40); // Declara una variable estatica de valor 1*2^40 en milisegundos
 
-struct ImageParams {
-  ImageParams() : anim_duration_ms(distant_future), wait_ms(1500),
-                  anim_delay_ms(-1), loops(-1) {}
-  tmillis_t anim_duration_ms;  // If this is an animation, duration to show.
-  tmillis_t wait_ms;           // Regular image: duration to show.
-  tmillis_t anim_delay_ms;     // Animation delay override.
-  int loops;
+struct ImageParams {	// Declara una estructura, parametros de tiempo principalmente
+  ImageParams() : anim_duration_ms(distant_future), wait_ms(1500),	// Inicializacion de la estructura ImageParams
+                  anim_delay_ms(-1), loops(-1) {}	
+  tmillis_t anim_duration_ms;  // Duracion del Gif, en caso de introducir uno.
+  tmillis_t wait_ms;           // Tiempo por defecto a mostrar una imagen, milisegundos.
+  tmillis_t anim_delay_ms;     // Espaciado entre imagenes, milisegundos.
+  int loops;				   // Numero de repeticiones que se realizaran del programa, -1 se corresponde a 1 unico bucle 
 };
 
-struct FileInfo {
-  ImageParams params;      // Each file might have specific timing settings
-  bool is_multi_frame;
+struct FileInfo {		// Estructura que define el tipo de archivo que maneja
+  ImageParams params;      // Declara una variable de tipo estructura (ImageParams)
+  bool is_multi_frame;	   // Variable booleana que contendra la informacion de si el archivo se trata de una animacion o una imagen
   rgb_matrix::StreamIO *content_stream;
 };
 
-volatile bool interrupt_received = false;
-static void InterruptHandler(int signo) {
+volatile bool interrupt_received = false;	// Declara una variable volatil global que rige la interrupcion de la funcion main
+static void InterruptHandler(int signo) {	
   interrupt_received = true;
 }
 
@@ -176,9 +176,9 @@ static bool LoadImageAndScale(const char *filename,
 void DisplayAnimation(const FileInfo *file,
                       RGBMatrix *matrix, FrameCanvas *offscreen_canvas,
                       int vsync_multiple) {
-  const tmillis_t duration_ms = (file->is_multi_frame
-                                 ? file->params.anim_duration_ms
-                                 : file->params.wait_ms);
+  const tmillis_t duration_ms = (file->is_multi_frame				// Condicion
+                                 ? file->params.anim_duration_ms	// Si se cumple dicha condicion
+                                 : file->params.wait_ms);			// No se cumple dicha condicion
   rgb_matrix::StreamReader reader(file->content_stream);
   int loops = file->params.loops;
   const tmillis_t end_time_ms = GetTimeInMillis() + duration_ms;
@@ -396,13 +396,13 @@ int main(int argc, char *argv[]) {
       rgb_matrix::StreamWriter out(file_info->content_stream);
       for (size_t i = 0; i < image_sequence.size(); ++i) {
         const Magick::Image &img = image_sequence[i];
-        int64_t delay_time_us;
-        if (file_info->is_multi_frame) {
-          delay_time_us = img.animationDelay() * 10000; // unit in 1/100s
+        int64_t delay_time_us;		// Declara el tiempo entre muestra de archivos en us
+        if (file_info->is_multi_frame) {	// Comprobacion de si el archivo se trata de una animacion
+          delay_time_us = img.animationDelay() * 10000; // En caso de tratarse de un gif, lo muestra 10000 us
         } else {
-          delay_time_us = file_info->params.wait_ms * 1000;  // single image.
+          delay_time_us = file_info->params.wait_ms * 1000;  // En caso de ser una imagen, lo muestra 1500*1000 us
         }
-        if (delay_time_us <= 0) delay_time_us = 100 * 1000;  // 1/10sec
+        if (delay_time_us <= 0) delay_time_us = 100 * 1000;  // Si el tiempo entre muestra de archivos es inferior a 0.1s, lo fija a este valor
         StoreInStream(img, delay_time_us, do_center, offscreen_canvas,
                       global_stream_writer ? global_stream_writer : &out);
       }
