@@ -1,15 +1,3 @@
-// -*- mode: c++; c-basic-offset: 2; indent-tabs-mode: nil; -*-
-// Copyright (C) 2015 Henner Zeller <h.zeller@acm.org>
-//
-// This program is free software; you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation version 2.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://gnu.org/licenses/gpl-2.0.txt>
 
@@ -67,32 +55,33 @@ struct FileInfo {		// Estructura que define el tipo de archivo que maneja
 };
 
 volatile bool interrupt_received = false;	// Declara una variable volatil global que rige la interrupcion de la funcion main
-static void InterruptHandler(int signo) {	
-  interrupt_received = true;
+static void InterruptHandler(int signo) {	// Funcion estatica que controla el valor de la variable interrupt_received
+  interrupt_received = true;				// Pone a true la variable que detendra la funcion main	
 }
 
-static tmillis_t GetTimeInMillis() {
-  struct timeval tp;
-  gettimeofday(&tp, NULL);
-  return tp.tv_sec * 1000 + tp.tv_usec / 1000;
+static tmillis_t GetTimeInMillis() {	// Funcion estatica que obtiene la fecha en ms desde un origen establecido, devuelve un tiempo en ms
+  struct timeval tp;	// Estructura propia de <sys/time.h>, que obtiene la cantidad de ms que han pasado desde el 1 de enero de 1970
+  gettimeofday(&tp, NULL);	// &tp se refiere a el como puntero, NULL es necesario para el tipo de resultado que se busca que genere gettimeofday
+  return tp.tv_sec * 1000 + tp.tv_usec / 1000;	// Precision de la funcion hasta us, devuelve un tiempo en ms. Dichos valores van a la estructura tp
 }
 
-static void SleepMillis(tmillis_t milli_seconds) {
-  if (milli_seconds <= 0) return;
-  struct timespec ts;
-  ts.tv_sec = milli_seconds / 1000;
-  ts.tv_nsec = (milli_seconds % 1000) * 1000000;
-  nanosleep(&ts, NULL);
+static void SleepMillis(tmillis_t milli_seconds) {	// Toma como entrada una variable (milli_seconds), de tipo tmillis_t, obtenido previamente
+													// Devuelve el tiempo en ms que estara la funcion main en parada
+  if (milli_seconds <= 0) return;	// Si a variable temporal es negativa, sale de la funcion
+  struct timespec ts;	// Define la structura ts del tipo timespec, propia de <sys/time.h>
+  ts.tv_sec = milli_seconds / 1000;		// Conversion a ms de la variable en s
+  ts.tv_nsec = (milli_seconds % 1000) * 1000000;	// Conversion a ms de la variable en us
+  nanosleep(&ts, NULL);		// Toma el tiempo calculado en ts como estructura y sera el que utilice para la detencion del programa
 }
 
 static void StoreInStream(const Magick::Image &img, int delay_time_us,
-                          bool do_center,
-                          rgb_matrix::FrameCanvas *scratch,
+                          bool do_center,	// Centrado de la imagen
+                          rgb_matrix::FrameCanvas *scratch,		
                           rgb_matrix::StreamWriter *output) {
   scratch->Clear();
   const int x_offset = do_center ? (scratch->width() - img.columns()) / 2 : 0;
   const int y_offset = do_center ? (scratch->height() - img.rows()) / 2 : 0;
-  for (size_t y = 0; y < img.rows(); ++y) {
+  for (size_t y = 0; y < img.rows(); ++y) {		// 
     for (size_t x = 0; x < img.columns(); ++x) {
       const Magick::Color &c = img.pixelColor(x, y);
       if (c.alphaQuantum() < 256) {
@@ -115,11 +104,11 @@ static void CopyStream(rgb_matrix::StreamReader *r,
   }
 }
 
-// Load still image or animation.
-// Scale, so that it fits in "width" and "height" and store in "result".
-static bool LoadImageAndScale(const char *filename,
-                              int target_width, int target_height,
-                              bool fill_width, bool fill_height,
+// Carga la imagen actual
+// La escala, de forma que encaje en ancho y largo, guarda el valor en result.
+static bool LoadImageAndScale(const char *filename,		// Nombre del archivo
+                              int target_width, int target_height,	// Ancho y largo objetivo
+                              bool fill_width, bool fill_height,	
                               std::vector<Magick::Image> *result,
                               std::string *err_msg) {
   std::vector<Magick::Image> frames;
@@ -129,8 +118,8 @@ static bool LoadImageAndScale(const char *filename,
     if (e.what()) *err_msg = e.what();
     return false;
   }
-  if (frames.size() == 0) {
-    fprintf(stderr, "No image found.");
+  if (frames.size() == 0) {	// Deteccion de error
+    fprintf(stderr, "Imagen no encontrada.");	// No se encuentra la imagen
     return false;
   }
 
@@ -146,12 +135,12 @@ static bool LoadImageAndScale(const char *filename,
   const int img_height = (*result)[0].rows();
   const float width_fraction = (float)target_width / img_width;
   const float height_fraction = (float)target_height / img_height;
-  if (fill_width && fill_height) {
+  if (fill_width && fill_height) {	// En caso de que se pida 
     // Scrolling diagonally. Fill as much as we can get in available space.
     // Largest scale fraction determines that.
-    const float larger_fraction = (width_fraction > height_fraction)
-      ? width_fraction
-      : height_fraction;
+    const float larger_fraction = (width_fraction > height_fraction)	// Condicion ancho > largo
+      ? width_fraction		// En caso de que se cumpla, larger_fraction toma el valor de width_fraction
+      : height_fraction;	// En caso contrario, toma el valor de height_fraction
     target_width = (int) roundf(larger_fraction * img_width);
     target_height = (int) roundf(larger_fraction * img_height);
   }
@@ -173,16 +162,18 @@ static bool LoadImageAndScale(const char *filename,
   return true;
 }
 
-void DisplayAnimation(const FileInfo *file,
+// Funcion para la muestra de animaciones Gif
+void DisplayAnimation(const FileInfo *file,		// Nombre del fichero deseado
                       RGBMatrix *matrix, FrameCanvas *offscreen_canvas,
-                      int vsync_multiple) {
-  const tmillis_t duration_ms = (file->is_multi_frame				// Condicion
-                                 ? file->params.anim_duration_ms	// Si se cumple dicha condicion
-                                 : file->params.wait_ms);			// No se cumple dicha condicion
+                      int vsync_multiple) {		// Sincronizacion vertical
+	// La duracion de muestra del archivo dependera de la naturaleza del mismo, Gif o imagen
+  const tmillis_t duration_ms = (file->is_multi_frame				// Condicion: ¿Tiene el fichero mas de 1 frame?
+                                 ? file->params.anim_duration_ms	// Si se cumple dicha condicion, toma duracion de Gif
+                                 : file->params.wait_ms);			// No se cumple dicha condicion, toma duracion de imagen
   rgb_matrix::StreamReader reader(file->content_stream);
-  int loops = file->params.loops;
-  const tmillis_t end_time_ms = GetTimeInMillis() + duration_ms;
-  const tmillis_t override_anim_delay = file->params.anim_delay_ms;
+  int loops = file->params.loops;	// La variable loops toma el valor aportado por loops dentro de parametros 
+  const tmillis_t end_time_ms = GetTimeInMillis() + duration_ms;	// Tiempo de finalizacion de muestra: hora actual + duracion de muestra
+  const tmillis_t override_anim_delay = file->params.anim_delay_ms;	//
   for (int k = 0;
        (loops < 0 || k < loops)
          && !interrupt_received
@@ -196,7 +187,7 @@ void DisplayAnimation(const FileInfo *file,
       const tmillis_t start_wait_ms = GetTimeInMillis();
       offscreen_canvas = matrix->SwapOnVSync(offscreen_canvas, vsync_multiple);
       const tmillis_t time_already_spent = GetTimeInMillis() - start_wait_ms;
-      SleepMillis(anim_delay_ms - time_already_spent);
+      SleepMillis(anim_delay_ms - time_already_spent);	
     }
     reader.Rewind();
   }
@@ -206,47 +197,47 @@ static int usage(const char *progname) {
   fprintf(stderr, "usage: %s [options] <image> [option] [<image> ...]\n",
           progname);
 
-  fprintf(stderr, "Options:\n"
+  fprintf(stderr, "Opciones:\n"
           "\t-O<streamfile>            : Output to stream-file instead of matrix (Don't need to be root).\n"
-          "\t-C                        : Center images.\n"
+          "\t-C                        : Centra imagenes.\n"
 
-          "\nThese options affect images following them on the command line:\n"
-          "\t-w<seconds>               : Regular image: "
-          "Wait time in seconds before next image is shown (default: 1.5).\n"
+          "\nEstas opciones afectan a las imagenes siguientes en la linea de comandos:\n"
+          "\t-w<seconds>               : Imagen normal: "
+          "Tiempo de espera entre imagenes en segundos (por defecto: 1.5).\n"
           "\t-t<seconds>               : "
-          "For animations: stop after this time.\n"
+          "Para animaciones: Se detiene tras este tiempo.\n"
           "\t-l<loop-count>            : "
-          "For animations: number of loops through a full cycle.\n"
+          "Para animaciones: numero de repeticiones para un ciclo completo.\n"
           "\t-D<animation-delay-ms>    : "
-          "For animations: override the delay between frames given in the\n"
-          "\t                            gif/stream animation with this value. Use -1 to use default value.\n"
+          "Para animaciones: anula el retraso entre frames dado en\n"
+          "\t                            gif/stream animation con este parametro. Usar -1 para el valor por defecto.\n"
 
-          "\nOptions affecting display of multiple images:\n"
+          "\nOpciones que afectan a la muestra de multiples imagenes:\n"
           "\t-f                        : "
-          "Forever cycle through the list of files on the command line.\n"
-          "\t-s                        : If multiple images are given: shuffle.\n"
+          "Ciclo perpetuo entre todos los ficheros de la linea de comandos.\n"
+          "\t-s                        : Si se aportan varias imagenes, se mezclan al mostrarse.\n"
           "\nDisplay Options:\n"
           "\t-V<vsync-multiple>        : Expert: Only do frame vsync-swaps on multiples of refresh (default: 1)\n"
           );
 
-  fprintf(stderr, "\nGeneral LED matrix options:\n");
+  fprintf(stderr, "\nOpciones generales LED matrix:\n");
   rgb_matrix::PrintMatrixFlags(stderr);
 
   fprintf(stderr,
-          "\nSwitch time between files: "
-          "-w for static images; -t/-l for animations\n"
-          "Animated gifs: If both -l and -t are given, "
-          "whatever finishes first determines duration.\n");
+          "\nTiempo entre cambio de archivos: "
+          "-w para imagenes estaticas; -t/-l para animaciones\n"
+          "Gifs animados: En caso de recibir -l y -t, "
+          "el primero en terminar, determina la duracion.\n");
 
-  fprintf(stderr, "\nThe -w, -t and -l options apply to the following images "
-          "until a new instance of one of these options is seen.\n"
-          "So you can choose different durations for different images.\n");
+  fprintf(stderr, "\nLos parametros -w, -l y -t se aplican a las siguientes imagenes "
+          "hasta que aparezca una nueva instancia de una de ellas.\n"
+          "Puedes aplicar diferentes opciones de tiempo para diferentes imagenes.\n");
 
   return 1;
 }
 
-int main(int argc, char *argv[]) {
-  Magick::InitializeMagick(*argv);
+int main(int argc, char *argv[]) {	// Programa principal, argumentos de entrada representan la cantidad de argumentos que pretendemos pasarle a main
+  Magick::InitializeMagick(*argv);	// Inicializacion de la biblioteca Magick
 
   RGBMatrix::Options matrix_options;
   rgb_matrix::RuntimeOptions runtime_opt;
@@ -255,8 +246,8 @@ int main(int argc, char *argv[]) {
     return usage(argv[0]);
   }
 
-  int vsync_multiple = 1;
-  bool do_forever = false;
+  int vsync_multiple = 1;	// Sincronizacion vertical, inicializacion de la variable
+  bool do_forever = false;	// Parametros de bucle perpetuo, centrado de imagenes y mezcla false por defecto
   bool do_center = false;
   bool do_shuffle = false;
 
@@ -277,99 +268,99 @@ int main(int argc, char *argv[]) {
 
   const char *stream_output = NULL;
 
-  int opt;
-  while ((opt = getopt(argc, argv, "w:t:l:fr:c:P:LhCR:sO:V:D:")) != -1) {
-    switch (opt) {
-    case 'w':
-      img_param.wait_ms = roundf(atof(optarg) * 1000.0f);
+  int opt;	// Declaracion de la variable opt
+  while ((opt = getopt(argc, argv, "w:t:l:fr:c:P:LhCR:sO:V:D:")) != -1) {	// Parametros para la muestra de ficheros
+    switch (opt) {	// Estructura de posibles casos para cada argumento de entrada para opt
+    case 'w':	// Tiempo de espera entre imagenes
+      img_param.wait_ms = roundf(atof(optarg) * 1000.0f); // Conversion a ms, cadena a doble y redondeo
       break;
-    case 't':
-      img_param.anim_duration_ms = roundf(atof(optarg) * 1000.0f);
+    case 't':	// Tiempo de duracion de animaciones
+      img_param.anim_duration_ms = roundf(atof(optarg) * 1000.0f);	// Conversion a ms, cadena a doble y redondeo
       break;
-    case 'l':
-      img_param.loops = atoi(optarg);
+    case 'l':	// Numero de ciclos a repetir
+      img_param.loops = atoi(optarg);	// Convierte cadena a entero
       break;
-    case 'D':
-      img_param.anim_delay_ms = atoi(optarg);
+    case 'D':	// Retraso entre animaciones
+      img_param.anim_delay_ms = atoi(optarg);	// Convierte cadena a entero
       break;
-    case 'f':
+    case 'f':	// Bucle perpetuo entre archivos proporcionados
       do_forever = true;
       break;
-    case 'C':
+    case 'C':	// Centrado de imagenes
       do_center = true;
       break;
-    case 's':
+    case 's':	// Mezclado de imagenes
       do_shuffle = true;
       break;
-    case 'r':
-      fprintf(stderr, "Instead of deprecated -r, use --led-rows=%s instead.\n",
+    case 'r':	// Opcion paa cambiar el numero de filas
+      fprintf(stderr, "Utilizar --led-rows=%s en vez de esta opcion.\n",
               optarg);
-      matrix_options.rows = atoi(optarg);
+      matrix_options.rows = atoi(optarg);	// Convierte cadena a entero
       break;
-    case 'c':
-      fprintf(stderr, "Instead of deprecated -c, use --led-chain=%s instead.\n",
+    case 'c':	// Opcion para cambiar el numero de columnas 
+      fprintf(stderr, "Utilizar --led-chain=%s en vez de esta opcion.\n",
               optarg);
-      matrix_options.chain_length = atoi(optarg);
+      matrix_options.chain_length = atoi(optarg);	// Convierte cadena a entero
       break;
     case 'P':
-      matrix_options.parallel = atoi(optarg);
+      matrix_options.parallel = atoi(optarg);	// Convierte cadena a entero
       break;
-    case 'L':
-      fprintf(stderr, "-L is deprecated. Use\n\t--led-pixel-mapper=\"U-mapper\" --led-chain=4\ninstead.\n");
+    case 'L':	// Opciones de mapeado y encadenado de la matriz
+      fprintf(stderr, "Utilizar --led-pixel-mapper=\"U-mapper\" --led-chain=4\nen vez de esta opcion.\n");
       return 1;
       break;
-    case 'R':
-      fprintf(stderr, "-R is deprecated. "
-              "Use --led-pixel-mapper=\"Rotate:%s\" instead.\n", optarg);
+    case 'R':	// Opcion de rotacion del fichero
+      fprintf(stderr, "-R es una opcion obsoleta. "
+              "Utilizar --led-pixel-mapper=\"Rotate:%s\" en vez de esta opcion.\n", optarg);
       return 1;
       break;
-    case 'O':
-      stream_output = strdup(optarg);
+    case 'O':	// Caso de que se pretenda exportar el fichero fuera de la matriz led
+      stream_output = strdup(optarg);	
       break;
     case 'V':
-      vsync_multiple = atoi(optarg);
-      if (vsync_multiple < 1) vsync_multiple = 1;
+      vsync_multiple = atoi(optarg);	// Convierte cadena a entero
+      if (vsync_multiple < 1) vsync_multiple = 1;	// Opcion de VSync
       break;
-    case 'h':
+    case 'h':	// Caso de que no se incluya ningun argumento
     default:
       return usage(argv[0]);
     }
 
-    // Starting from the current file, set all the remaining files to
-    // the latest change.
+    // Empezando por el archivo actual, establece las condiciones de los archivos restantes al ultimo cambio
     for (int i = optind; i < argc; ++i) {
       filename_params[argv[i]] = img_param;
     }
   }
 
-  const int filename_count = argc - optind;
-  if (filename_count == 0) {
-    fprintf(stderr, "Expected image filename.\n");
-    return usage(argv[0]);
+  const int filename_count = argc - optind;	// Conteo de archivos de entrada
+  if (filename_count == 0) {	// En caso de no recibir ningun archivo
+    fprintf(stderr, "No se ha encontrado ningun fichero compatible.\n");	
+    return usage(argv[0]);	// Vuelve a usage, para que se vuelva a introducir la informacion deseada
   }
 
-  // Prepare matrix
+  // Preparacion de la matriz
   runtime_opt.do_gpio_init = (stream_output == NULL);
   RGBMatrix *matrix = CreateMatrixFromOptions(matrix_options, runtime_opt);
   if (matrix == NULL)
     return 1;
 
-  FrameCanvas *offscreen_canvas = matrix->CreateFrameCanvas();
+  FrameCanvas *offscreen_canvas = matrix->CreateFrameCanvas();	// ASOCIACION DE MATRIZ APAGADA A INICIALIZACION DE MATRIZ
+																// DENTRO DE led-matrix.h, linea 236
 
-  printf("Size: %dx%d. Hardware gpio mapping: %s\n",
+  printf("Tamaño: %dx%d. Mapeado de hardware GPIO: %s\n",
          matrix->width(), matrix->height(), matrix_options.hardware_mapping);
 
   // These parameters are needed once we do scrolling.
   const bool fill_width = false;
   const bool fill_height = false;
 
-  // In case the output to stream is requested, set up the stream object.
+  // En caso de pedirse salida externa, establece la salida externa objetivo.
   rgb_matrix::StreamIO *stream_io = NULL;
   rgb_matrix::StreamWriter *global_stream_writer = NULL;
   if (stream_output) {
     int fd = open(stream_output, O_CREAT|O_WRONLY, 0644);
     if (fd < 0) {
-      perror("Couldn't open output stream");
+      perror("No se ha podido abrir la salida externa objetivo");
       return 1;
     }
     stream_io = new rgb_matrix::FileStreamIO(fd);
@@ -377,9 +368,8 @@ int main(int argc, char *argv[]) {
   }
 
   const tmillis_t start_load = GetTimeInMillis();
-  fprintf(stderr, "Loading %d files...\n", argc - optind);
-  // Preparing all the images beforehand as the Pi might be too slow to
-  // be quickly switching between these. So preprocess.
+  fprintf(stderr, "Cargando %d archivos...\n", argc - optind);
+  //Se preparan los ficheron antes de mostrarlos, para evitar la ralentizacion del sistema
   std::vector<FileInfo*> file_imgs;
   for (int imgarg = optind; imgarg < argc; ++imgarg) {
     const char *filename = argv[imgarg];
@@ -407,7 +397,7 @@ int main(int argc, char *argv[]) {
                       global_stream_writer ? global_stream_writer : &out);
       }
     } else {
-      // Ok, not an image. Let's see if it is one of our streams.
+      // En caso de no resultar ser una imagen, prueba con una fuente externa
       int fd = open(filename, O_RDONLY);
       if (fd >= 0) {
         file_info = new FileInfo();
@@ -421,7 +411,7 @@ int main(int argc, char *argv[]) {
             CopyStream(&reader, global_stream_writer, offscreen_canvas);
           }
         } else {
-          err_msg = "Can't read as image or compatible stream";
+          err_msg = "No se puede leer como una imagen compatible";
           delete file_info->content_stream;
           delete file_info;
           file_info = NULL;
@@ -432,7 +422,7 @@ int main(int argc, char *argv[]) {
     if (file_info) {
       file_imgs.push_back(file_info);
     } else {
-      fprintf(stderr, "%s skipped: Unable to open (%s)\n",
+      fprintf(stderr, "%s saltado: No se ha podido abrir (%s)\n",
               filename, err_msg.c_str());
     }
   }
@@ -441,24 +431,23 @@ int main(int argc, char *argv[]) {
     delete global_stream_writer;
     delete stream_io;
     if (file_imgs.size()) {
-      fprintf(stderr, "Done: Output to stream %s; "
-              "this can now be opened with led-image-viewer with the exact same panel configuration settings such as rows, chain, parallel and hardware-mapping\n", stream_output);
+      fprintf(stderr, "Realizado: Salida externa %s; "
+              "ahora puede abrirse con led-image-viewer con la misma configuracion de panel\n", stream_output);
     }
     if (do_shuffle)
-      fprintf(stderr, "Note: -s (shuffle) does not have an effect when generating streams.\n");
+      fprintf(stderr, "Nota: -s (mezcla) no tiene efecto al generarse archivos externos.\n");
     if (do_forever)
-      fprintf(stderr, "Note: -f (forever) does not have an effect when generating streams.\n");
+      fprintf(stderr, "Nota: -f (bucle perpetuo) no tiene efecto al generarse archivos externos.\n");
     // Done, no actual output to matrix.
     return 0;
   }
 
-  // Some parameter sanity adjustments.
   if (file_imgs.empty()) {
-    // e.g. if all files could not be interpreted as image.
-    fprintf(stderr, "No image could be loaded.\n");
-    return 1;
+    // Caso de que las imagenes no puedan ser representadas
+    fprintf(stderr, "No se ha codido cargar la imagen.\n"); // Muestra por pantalla el fallo
+    return 1;	
   } else if (file_imgs.size() == 1) {
-    // Single image: show forever.
+    // Imagen unica
     file_imgs[0]->params.wait_ms = distant_future;
   } else {
     for (size_t i = 0; i < file_imgs.size(); ++i) {
@@ -476,6 +465,7 @@ int main(int argc, char *argv[]) {
 
   signal(SIGTERM, InterruptHandler);	// Termina la señal, libreria propia de c
   signal(SIGINT, InterruptHandler);		// Interrumpe la señal, libreria propia de c
+										// Ambas instrucciones hacen que la variable interrupt_received se ponga a true
 
   do {
     if (do_shuffle) {
@@ -490,8 +480,8 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "Caught signal. Exiting.\n");
   }
 
-  // Animation finished. Shut down the RGB matrix.
-  matrix->Clear();
+  // Animacion terminada. Apagado de la matriz
+  matrix->Clear();	// Limpiado de la matriz, puesta a 0 de todos los pixeles
   delete matrix;
 
   // Leaking the FileInfos, but don't care at program end.
