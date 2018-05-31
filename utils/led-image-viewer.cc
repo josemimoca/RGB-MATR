@@ -51,7 +51,7 @@ struct ImageParams {	// Declara una estructura, parametros de tiempo principalme
 struct FileInfo {		// Estructura que define el tipo de archivo que maneja
   ImageParams params;      // Declara una variable de tipo estructura (ImageParams)
   bool is_multi_frame;	   // Variable booleana que contendra la informacion de si el archivo se trata de una animacion o una imagen
-  rgb_matrix::StreamIO *content_stream;
+  rgb_matrix::StreamIO *content_stream;	// Declara una variable (content_stream), del tipo clase (StreamIO) biblioteca content-streamer.h
 };
 
 volatile bool interrupt_received = false;	// Declara una variable volatil global que rige la interrupcion de la funcion main
@@ -74,21 +74,21 @@ static void SleepMillis(tmillis_t milli_seconds) {	// Toma como entrada una vari
   nanosleep(&ts, NULL);		// Toma el tiempo calculado en ts como estructura y sera el que utilice para la detencion del programa
 }
 
-static void StoreInStream(const Magick::Image &img, int delay_time_us,
+static void StoreInStream(const Magick::Image &img, int delay_time_us,	// Carga de ficheros y tiempo de retraso entre los mismos
                           bool do_center,	// Centrado de la imagen
-                          rgb_matrix::FrameCanvas *scratch,		
-                          rgb_matrix::StreamWriter *output) {
+                          rgb_matrix::FrameCanvas *scratch,		// Instruccion para exportar el fichero a una fuente externa
+                          rgb_matrix::StreamWriter *output) {	// ""
   scratch->Clear();
-  const int x_offset = do_center ? (scratch->width() - img.columns()) / 2 : 0;
-  const int y_offset = do_center ? (scratch->height() - img.rows()) / 2 : 0;
-  for (size_t y = 0; y < img.rows(); ++y) {		// 
-    for (size_t x = 0; x < img.columns(); ++x) {
-      const Magick::Color &c = img.pixelColor(x, y);
-      if (c.alphaQuantum() < 256) {
-        scratch->SetPixel(x + x_offset, y + y_offset,
-                          ScaleQuantumToChar(c.redQuantum()),
-                          ScaleQuantumToChar(c.greenQuantum()),
-                          ScaleQuantumToChar(c.blueQuantum()));
+  const int x_offset = do_center ? (scratch->width() - img.columns()) / 2 : 0;	// En caso de que se pida centrar la imagen,
+  const int y_offset = do_center ? (scratch->height() - img.rows()) / 2 : 0;	// se modifica la posicion en x e y
+  for (size_t y = 0; y < img.rows(); ++y) {		// Barrido en el eje y
+    for (size_t x = 0; x < img.columns(); ++x) {	// Barrido en el eje x
+      const Magick::Color &c = img.pixelColor(x, y);	// Obtencion del color (c), x e y son variables de tamaño de la matriz
+      if (c.alphaQuantum() < 256) {								// Establece el color de cada pixel
+        scratch->SetPixel(x + x_offset, y + y_offset,	// Posicion del pixel a colorear
+                          ScaleQuantumToChar(c.redQuantum()),		// Rojo, conversion de cantidad a cadena
+                          ScaleQuantumToChar(c.greenQuantum()),		// Verde, ""
+                          ScaleQuantumToChar(c.blueQuantum()));		// Azul, ""
       }
     }
   }
@@ -108,62 +108,57 @@ static void CopyStream(rgb_matrix::StreamReader *r,
 // La escala, de forma que encaje en ancho y largo, guarda el valor en result.
 static bool LoadImageAndScale(const char *filename,		// Nombre del archivo
                               int target_width, int target_height,	// Ancho y largo objetivo
-                              bool fill_width, bool fill_height,	
-                              std::vector<Magick::Image> *result,
-                              std::string *err_msg) {
-  std::vector<Magick::Image> frames;
-  try {
-    readImages(&frames, filename);
+                              bool fill_width, bool fill_height,	// Llenado vertical/horizontal
+                              std::vector<Magick::Image> *result,	// Toma los valores del fichero y lo almacena en *result (vector)
+                              std::string *err_msg) {	// Error como cadena de caracteres
+  std::vector<Magick::Image> frames;	// Genera un vector (frames) que contiene las imagenes cargadas
+  try {									// Estructura de excepcion. El programa leera imagenes hasta que se produzca una excepcion.
+    readImages(&frames, filename);		
   } catch (std::exception& e) {
-    if (e.what()) *err_msg = e.what();
-    return false;
+    if (e.what()) *err_msg = e.what();	// En este caso, la excepcion sera la señal de error.
+    return false;						// Devuelve false para detener el programa
   }
   if (frames.size() == 0) {	// Deteccion de error
     fprintf(stderr, "Imagen no encontrada.");	// No se encuentra la imagen
     return false;
   }
 
-  // Put together the animation from single frames. GIFs can have nasty
-  // disposal modes, but they are handled nicely by coalesceImages()
+  // Combina una secuencia de imagenes, util para Gif
   if (frames.size() > 1) {
-    Magick::coalesceImages(result, frames.begin(), frames.end());
+    Magick::coalesceImages(result, frames.begin(), frames.end());	// Toma el inicio y el final de los frames aportados y los guarda en result
   } else {
-    result->push_back(frames[0]);   // just a single still image.
+    result->push_back(frames[0]);   // En caso de ser una imagen unica, result toma el valor 0
   }
 
-  const int img_width = (*result)[0].columns();
-  const int img_height = (*result)[0].rows();
-  const float width_fraction = (float)target_width / img_width;
-  const float height_fraction = (float)target_height / img_height;
-  if (fill_width && fill_height) {	// En caso de que se pida 
-    // Scrolling diagonally. Fill as much as we can get in available space.
-    // Largest scale fraction determines that.
+  const int img_width = (*result)[0].columns();	// Ancho de la imagen almacenada en result
+  const int img_height = (*result)[0].rows();	// Altura de la imagen almacenada en result
+  const float width_fraction = (float)target_width / img_width;	// Escalado horizontal
+  const float height_fraction = (float)target_height / img_height;	// Escalado vertical
+  if (fill_width && fill_height) {	// En caso de que se pida, la imagen se adapta en eje x e y al maximo de su capacidad
     const float larger_fraction = (width_fraction > height_fraction)	// Condicion ancho > largo
       ? width_fraction		// En caso de que se cumpla, larger_fraction toma el valor de width_fraction
       : height_fraction;	// En caso contrario, toma el valor de height_fraction
-    target_width = (int) roundf(larger_fraction * img_width);
-    target_height = (int) roundf(larger_fraction * img_height);
+    target_width = (int) roundf(larger_fraction * img_width);	// Redondeo del escalado de la imagen horizontal
+    target_height = (int) roundf(larger_fraction * img_height);	// Redondeo del escalado de la imagen vertical
   }
   else if (fill_height) {
-    // Horizontal scrolling: Make things fit in vertical space.
-    // While the height constraint stays the same, we can expand to full
-    // width as we scroll along that axis.
-    target_width = (int) roundf(height_fraction * img_width);
+    // Escalado de la imagen horizontal
+    target_width = (int) roundf(height_fraction * img_width);	// Calculo de ancho como el redondeo del producto de ancho y escala unitaria
   }
   else if (fill_width) {
-    // dito, vertical. Make things fit in horizontal space.
-    target_height = (int) roundf(width_fraction * img_height);
+    // Escalado de la imagen vertical
+    target_height = (int) roundf(width_fraction * img_height);	// Calculo de alto "" alto y escala unitaria
   }
 
-  for (size_t i = 0; i < result->size(); ++i) {
-    (*result)[i].scale(Magick::Geometry(target_width, target_height));
+  for (size_t i = 0; i < result->size(); ++i) {	// Asigna a cada elemento de result de tipo imagen el tamaño obtenido previamente
+    (*result)[i].scale(Magick::Geometry(target_width, target_height));	// como target_height y target_width
   }
 
   return true;
 }
 
 // Funcion para la muestra de animaciones Gif
-void DisplayAnimation(const FileInfo *file,		// Nombre del fichero deseado
+void DisplayAnimation(const FileInfo *file,		// Declara la variable file, de tipo clase FileInfo
                       RGBMatrix *matrix, FrameCanvas *offscreen_canvas,
                       int vsync_multiple) {		// Sincronizacion vertical
 	// La duracion de muestra del archivo dependera de la naturaleza del mismo, Gif o imagen
@@ -173,21 +168,21 @@ void DisplayAnimation(const FileInfo *file,		// Nombre del fichero deseado
   rgb_matrix::StreamReader reader(file->content_stream);
   int loops = file->params.loops;	// La variable loops toma el valor aportado por loops dentro de parametros 
   const tmillis_t end_time_ms = GetTimeInMillis() + duration_ms;	// Tiempo de finalizacion de muestra: hora actual + duracion de muestra
-  const tmillis_t override_anim_delay = file->params.anim_delay_ms;	//
+  const tmillis_t override_anim_delay = file->params.anim_delay_ms;	// El tiempo de anulado de ejecucion toma el valor del tiempo de retraso
   for (int k = 0;
-       (loops < 0 || k < loops)
-         && !interrupt_received
-         && GetTimeInMillis() < end_time_ms;
+       (loops < 0 || k < loops)	// OR logico de ambas condiciones
+         && !interrupt_received	// No se recibe interrupcion
+         && GetTimeInMillis() < end_time_ms;	// El tiempo de ejecucion es menor al de finalizacion
        ++k) {
-    uint32_t delay_us = 0;
-    while (!interrupt_received && GetTimeInMillis() <= end_time_ms
-           && reader.GetNext(offscreen_canvas, &delay_us)) {
-      const tmillis_t anim_delay_ms =
-        override_anim_delay >= 0 ? override_anim_delay : delay_us / 1000;
-      const tmillis_t start_wait_ms = GetTimeInMillis();
-      offscreen_canvas = matrix->SwapOnVSync(offscreen_canvas, vsync_multiple);
-      const tmillis_t time_already_spent = GetTimeInMillis() - start_wait_ms;
-      SleepMillis(anim_delay_ms - time_already_spent);	
+    uint32_t delay_us = 0;	// Resetea el valor de el retraso entre imagenes en us
+    while (!interrupt_received && GetTimeInMillis() <= end_time_ms	// Mientras que no se reciba la señal de interrupcion y el tiempo de ejecucion
+           && reader.GetNext(offscreen_canvas, &delay_us)) {		// sea inferior al tiempo de finalizacion y al de retraso entre archivos
+      const tmillis_t anim_delay_ms =	// El retraso entre animaciones toma el valor del anulado de ejecucion si este es > 0, o el valor de retraso
+        override_anim_delay >= 0 ? override_anim_delay : delay_us / 1000;	// por defecto si este es < 0, es decir, ha terminado
+      const tmillis_t start_wait_ms = GetTimeInMillis();	// Establece en este instante el tiempo de inicio como tiempo actual
+      offscreen_canvas = matrix->SwapOnVSync(offscreen_canvas, vsync_multiple);	// 
+      const tmillis_t time_already_spent = GetTimeInMillis() - start_wait_ms;	// Tiempo pasado desde la ejecucion se calcula como tiempo actual - tiempo de inicio
+      SleepMillis(anim_delay_ms - time_already_spent);	// Tiempo de parada de la funcion main establecido como tiempo de retraso menos tiempo de ejecucion
     }
     reader.Rewind();
   }
@@ -239,11 +234,11 @@ static int usage(const char *progname) {
 int main(int argc, char *argv[]) {	// Programa principal, argumentos de entrada representan la cantidad de argumentos que pretendemos pasarle a main
   Magick::InitializeMagick(*argv);	// Inicializacion de la biblioteca Magick
 
-  RGBMatrix::Options matrix_options;
-  rgb_matrix::RuntimeOptions runtime_opt;
-  if (!rgb_matrix::ParseOptionsFromFlags(&argc, &argv,
+  RGBMatrix::Options matrix_options;	// Carga las opciones de matriz de led-matrix.h
+  rgb_matrix::RuntimeOptions runtime_opt;	// Carga las opciones de inicializacion de matriz de led-matrix.h
+  if (!rgb_matrix::ParseOptionsFromFlags(&argc, &argv,	// La funcion ParseOptionsFromFlags devuelve True si detecta un fallo en los argumentos
                                          &matrix_options, &runtime_opt)) {
-    return usage(argv[0]);
+    return usage(argv[0]);	// En caso de detectar un error vuelve a la pedida de argumentos
   }
 
   int vsync_multiple = 1;	// Sincronizacion vertical, inicializacion de la variable
@@ -251,16 +246,10 @@ int main(int argc, char *argv[]) {	// Programa principal, argumentos de entrada 
   bool do_center = false;
   bool do_shuffle = false;
 
-  // We remember ImageParams for each image, which will change whenever
-  // there is a flag modifying them. This map keeps track of filenames
-  // and their image params (also for unrelated elements of argv[], but doesn't
-  // matter).
-  // We map the pointer instad of the string of the argv parameter so that
-  // we can have two times the same image on the commandline list with different
-  // parameters.
+	// Comando que asociara a cada fichero las opciones que se le hayan asignado previamente.
   std::map<const void *, struct ImageParams> filename_params;
 
-  // Set defaults.
+	// Establece valores por defecto para img_param para todas las imagenes cargadas
   ImageParams img_param;
   for (int i = 0; i < argc; ++i) {
     filename_params[argv[i]] = img_param;
@@ -340,7 +329,7 @@ int main(int argc, char *argv[]) {	// Programa principal, argumentos de entrada 
 
   // Preparacion de la matriz
   runtime_opt.do_gpio_init = (stream_output == NULL);
-  RGBMatrix *matrix = CreateMatrixFromOptions(matrix_options, runtime_opt);
+  RGBMatrix *matrix = CreateMatrixFromOptions(matrix_options, runtime_opt);	// Valores de la matriz
   if (matrix == NULL)
     return 1;
 
@@ -348,7 +337,7 @@ int main(int argc, char *argv[]) {	// Programa principal, argumentos de entrada 
 																// DENTRO DE led-matrix.h, linea 236
 
   printf("Tamaño: %dx%d. Mapeado de hardware GPIO: %s\n",
-         matrix->width(), matrix->height(), matrix_options.hardware_mapping);
+         matrix->width(), matrix->height(), matrix_options.hardware_mapping);	// Muestra parametros de tamaño en pantalla
 
   // These parameters are needed once we do scrolling.
   const bool fill_width = false;
@@ -438,7 +427,7 @@ int main(int argc, char *argv[]) {	// Programa principal, argumentos de entrada 
       fprintf(stderr, "Nota: -s (mezcla) no tiene efecto al generarse archivos externos.\n");
     if (do_forever)
       fprintf(stderr, "Nota: -f (bucle perpetuo) no tiene efecto al generarse archivos externos.\n");
-    // Done, no actual output to matrix.
+    // Si llega a este punto no se mostrara nada en pantalla
     return 0;
   }
 
@@ -468,22 +457,21 @@ int main(int argc, char *argv[]) {	// Programa principal, argumentos de entrada 
 										// Ambas instrucciones hacen que la variable interrupt_received se ponga a true
 
   do {
-    if (do_shuffle) {
-      std::random_shuffle(file_imgs.begin(), file_imgs.end());
+    if (do_shuffle) {	// Condicion para mezclado de imagenes
+      std::random_shuffle(file_imgs.begin(), file_imgs.end()); // Instruccion para mezclado de imagenes
     }
-    for (size_t i = 0; i < file_imgs.size() && !interrupt_received; ++i) {
-      DisplayAnimation(file_imgs[i], matrix, offscreen_canvas, vsync_multiple);
+    for (size_t i = 0; i < file_imgs.size() && !interrupt_received; ++i) {	// Para todas las imagenes, mientras no se reciba señal de interrupcion
+      DisplayAnimation(file_imgs[i], matrix, offscreen_canvas, vsync_multiple);	// Muestra las imagenes en la matriz
     }
-  } while (do_forever && !interrupt_received);
+  } while (do_forever && !interrupt_received);	// Bucle perpetuo mientras no se reciba interrupcion
 
-  if (interrupt_received) {
-    fprintf(stderr, "Caught signal. Exiting.\n");
+  if (interrupt_received) {	// En caso de recibir señal de interrupcion, se detiene el programa
+    fprintf(stderr, "Señal recibida. Saliendo.\n");	// Aviso de interrupcion
   }
 
   // Animacion terminada. Apagado de la matriz
   matrix->Clear();	// Limpiado de la matriz, puesta a 0 de todos los pixeles
-  delete matrix;
+  delete matrix;	// Borra los datos de la matriz para la puesta a 0
 
-  // Leaking the FileInfos, but don't care at program end.
   return 0;
 }
